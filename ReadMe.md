@@ -13,7 +13,7 @@ This means making as few modifications as possible.
 
 ## Compilation Instructions (for Mac)
 
-cd Downloads/
-git clone https://github.com/Spill-The-Tea/vajolet.git Vajolet
-cmake Downloads/Vajolet
+cd Downloads/ </br>
+git clone https://github.com/Spill-The-Tea/vajolet.git Vajolet </br>
+cmake Downloads/Vajolet </br>
 make
