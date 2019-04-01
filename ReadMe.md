@@ -14,6 +14,6 @@ This means making as few modifications as possible.
 ## Compilation Instructions (for Mac)
 
 cd Downloads/
-git clone Vajolet
+git clone https://github.com/Spill-The-Tea/vajolet.git Vajolet
 cmake Downloads/Vajolet
 make
