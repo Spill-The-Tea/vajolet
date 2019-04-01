@@ -19,6 +19,11 @@
 //	include
 //---------------------------------------------
 #include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <chrono>
+#include <iterator>
 
 #include "benchmark.h"
 #include "command.h"
