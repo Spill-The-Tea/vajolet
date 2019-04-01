@@ -10,3 +10,10 @@ Vajolet is a free UCI chess engine.
 
 The purpose of this particular fork is to make Vajolet MacOSX/Darwin Compatible. </br>
 This means making as few modifications as possible.
+
+## Compilation Instructions (for Mac)
+
+cd Downloads/
+git clone Vajolet
+cmake Downloads/Vajolet
+make
