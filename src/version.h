@@ -14,43 +14,14 @@
     You should have received a copy of the GNU General Public License
     along with Vajolet.  If not, see <http://www.gnu.org/licenses/>
 */
-#include "bitops.h"
-#include "data.h"
-#include "io.h"
 
+#ifndef VERSION_H_
+#define VERSION_H_
 
-/*! \brief display a bitmap on stdout
-	\author Marco Belli
-	\version 1.0
-	\date 21/10/2013
-*/
-void displayBitmap(const bitMap b)
-{
-	char boardc[squareNumber];
+#include <string>
 
-	for ( tSquare sq = A1; sq < squareNumber; ++sq)
-	{
-		if ( isSquareSet( b, sq ) )
-		{
-			boardc[sq] = '1';
-		}
-		else
-		{
-			boardc[sq] = '.';
-		}
-	}
+const std::string programName = "Vajolet2";
+const std::string version = "2.8.0";
+const std::string preRelease = "-PRE-2";
 
-	sync_cout;
-	for (tRank rank = RANK8 ; rank >= RANK1; --rank)
-	{
-		std::cout <<rank +1<< " ";
-		for (tFile file = FILEA ; file <= FILEH; ++file)
-		{
-			std::cout << boardc[getSquare(file,rank)];
-		}
-		std::cout << std::endl;
-	}
-	std::cout << std::endl << "  abcdefgh" << sync_endl;
-}
-
-
+#endif
