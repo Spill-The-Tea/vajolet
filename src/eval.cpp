@@ -1219,16 +1219,16 @@ Score Position::eval(void) const
 	kingSafety[white] = evalShieldStorm<white>(getSquareOfThePiece(whiteKing));
 
 	if( st.hasCastleRight( wCastleOO )
-		&& !(attackedSquares[blackPieces] & (bitSet(E1) | bitSet(F1) | bitSet(G1) ))
-		&& bitCnt(getOccupationBitmap() & (bitSet(F1) | bitSet(G1))) <= 1
+		&& !(attackedSquares[blackPieces] & (bitSet(E1) | getCastleKingPath(wCastleOO)))
+		&& !moreThanOneBit(_CastlePathOccupancyBitmap(wCastleOO))
 		)
 	{
 		kingSafety[white] = std::max( evalShieldStorm<white>(G1), kingSafety[white]);
 	}
 
 	if( st.hasCastleRight( wCastleOOO )
-		&& !(attackedSquares[blackPieces] & (bitSet(E1) | bitSet(D1) | bitSet(C1) ))
-		&& bitCnt(getOccupationBitmap() & (bitSet(D1) | bitSet(C1) | bitSet(B1) )) <=1
+		&& !(attackedSquares[blackPieces] & (bitSet(E1) | getCastleKingPath(wCastleOOO)))
+		&& !moreThanOneBit(_CastlePathOccupancyBitmap(wCastleOOO))
 		)
 	{
 		kingSafety[white] = std::max( evalShieldStorm<white>(C1), kingSafety[white]);
@@ -1241,16 +1241,16 @@ Score Position::eval(void) const
 	kingSafety[black] = evalShieldStorm<black>(getSquareOfThePiece(blackKing));
 
 	if( st.hasCastleRight( bCastleOO )
-		&& !(attackedSquares[whitePieces] & (bitSet(E8) | bitSet(F8) | bitSet(G8) ))
-		&& bitCnt(getOccupationBitmap() & (bitSet(F8) | bitSet(G8))) <=1
+		&& !(attackedSquares[whitePieces] & (bitSet(E8) | getCastleKingPath(bCastleOO)))
+		&& !moreThanOneBit(_CastlePathOccupancyBitmap(bCastleOO))
 		)
 	{
 		kingSafety[black] = std::max( evalShieldStorm<black>(G8), kingSafety[black]);
 	}
 
 	if( st.hasCastleRight( bCastleOOO )
-		&& !(attackedSquares[whitePieces] & (bitSet(E8) | bitSet(D8) | bitSet(C8) ))
-		&& bitCnt(getOccupationBitmap() & (bitSet(D8) | bitSet(C8) | bitSet(B8))) <=1
+		&& !(attackedSquares[whitePieces] & (bitSet(E8) | getCastleKingPath(bCastleOOO)))
+		&& !moreThanOneBit(_CastlePathOccupancyBitmap(bCastleOOO))
 		)
 	{
 		kingSafety[black] = std::max(evalShieldStorm<black>(C8), kingSafety[black]);
@@ -1322,25 +1322,19 @@ Score Position::eval(void) const
 	{
 		mulCoeff = std::min((unsigned int)256, getPieceCount(whitePawns) * 80);
 	}
-
-
-
-
-
-
+	
+	if (mulCoeff == 256) {
+		mulCoeff = std::min(160 + (isOppositeBishops() ? 4 : 14) * (getPieceCount(whitePawns)+ getPieceCount(blackPawns)), 256u);
+	}
 
 	//--------------------------------------
 	//	finalizing
 	//--------------------------------------
 	signed int gamePhase = getGamePhase( st );
-	signed long long r = ( (signed long long)res[0] ) * ( 65536 - gamePhase ) + ( (signed long long)res[1] ) * gamePhase;
+	// mulCoeff will multiplicate only endgame
+	signed long long r = (((signed long long)res[0]) * (65536 - gamePhase)) + (((signed long long)res[1]) * gamePhase * mulCoeff / 256);
 
 	Score score = (Score)( (r) / 65536 );
-	if(mulCoeff != 256)
-	{
-		score *= mulCoeff;
-		score /= 256;
-	}
 
 	// final value saturation
 	score = std::min(highSat,score);

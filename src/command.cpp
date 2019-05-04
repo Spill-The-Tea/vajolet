@@ -50,13 +50,13 @@ uci concrete output definitions
 class UciMuteOutput: public UciOutput
 {
 public:
-	void printPVs(std::vector<rootMove>& rm, int maxLinePrint = -1) const;
-	void printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, const PVbound bound = normal, const int depth = -1, const int count = -1) const;
-	void printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time) const;
+	void printPVs(std::vector<rootMove>& rm, bool ischess960, int maxLinePrint = -1) const;
+	void printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, bool ischess960, const PVbound bound = normal, const int depth = -1, const int count = -1) const;
+	void printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time, bool isChess960) const;
 	void showCurrLine(const Position & pos, const unsigned int ply) const;
 	void printDepth() const;
 	void printScore(const signed int cp) const;
-	void printBestMove( const Move& m, const Move& ponder) const;
+	void printBestMove( const Move& m, const Move& ponder, bool isChess960) const;
 	void printGeneralInfo( const unsigned int fullness, const unsigned long long int thbits, const unsigned long long int nodes, const long long int time) const;
 };
 
@@ -65,13 +65,13 @@ class UciStandardOutput: public UciOutput
 {
 public:
 	static bool reduceVerbosity;
-	void printPVs(std::vector<rootMove>& rm, int maxLinePrint = -1) const;
-	void printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, const PVbound bound = normal, const int depth = -1, const int count = -1) const;
-	void printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time) const;
+	void printPVs(std::vector<rootMove>& rm, bool ischess960, int maxLinePrint = -1) const;
+	void printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, bool ischess960, const PVbound bound = normal, const int depth = -1, const int count = -1) const;
+	void printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time, bool isChess960) const;
 	void showCurrLine(const Position & pos, const unsigned int ply) const;
 	void printDepth() const;
 	void printScore(const signed int cp) const;
-	void printBestMove( const Move& m, const Move& ponder) const;
+	void printBestMove( const Move& m, const Move& ponder, bool isChess960) const;
 	void printGeneralInfo( const unsigned int fullness, const unsigned long long int thbits, const unsigned long long int nodes, const long long int time) const;
 };
 
@@ -82,9 +82,9 @@ public:
 	~impl();
 	
 	void uciLoop();
-	static char getPieceName( const bitboardIndex idx );
-	static std::string displayUci( const Move& m );
-	static std::string displayMove( const Position& pos, const Move& m );
+	static char getPieceName(const bitboardIndex idx);
+	static std::string displayUci(const Move& m, const bool chess960);
+	static std::string displayMove(const Position& pos, const Move& m);
 	
 private:
 	/*! \brief array of char to create the fen string
@@ -307,18 +307,20 @@ UciManager::impl::impl()
 	_optionList.emplace_back( new ButtonUciOption("ClearHash", clearHash));
 	_optionList.emplace_back( new CheckUciOption("PerftUseHash", Perft::perftUseHash, false));
 	_optionList.emplace_back( new CheckUciOption("reduceVerbosity", UciStandardOutput::reduceVerbosity, false));
+	_optionList.emplace_back( new CheckUciOption("UCI_Chess960", uciParameters::Chess960, false));
+	
 	_pos.setupFromFen(_StartFEN);
 }
 
 UciManager::impl::~impl()
 {}
 
-char UciManager::impl::getPieceName( const bitboardIndex idx ){
+char UciManager::impl::getPieceName(const bitboardIndex idx){
 	assert( isValidPiece( idx ) || idx == empty);
 	return _PIECE_NAMES_FEN[ idx ];
 }
 
-std::string UciManager::impl::displayUci( const Move& m )
+std::string UciManager::impl::displayUci(const Move& m, const bool chess960)
 {
 	std::string s;
 
@@ -327,15 +329,21 @@ std::string UciManager::impl::displayUci( const Move& m )
 		s = "0000";
 		return s;
 	}
-
+	
+	auto from = m.getFrom();
 	//from
-	s += _printFileOf( m.getFrom() );
-	s += _printRankOf( m.getFrom() );
+	s += _printFileOf(from);
+	s += _printRankOf(from);
 
+	auto to = m.getTo();
+	if (m.isCastleMove() && !chess960)
+	{
+		to = getSquare(m.isKingSideCastle() ? FILEG : FILEC, getRankOf(from));
+	}
 
 	//to
-	s += _printFileOf( m.getTo() );
-	s += _printRankOf( m.getTo() );
+	s += _printFileOf(to);
+	s += _printRankOf(to);
 	//promotion
 	if( m.isPromotionMove() )
 	{
@@ -344,7 +352,7 @@ std::string UciManager::impl::displayUci( const Move& m )
 	return s;
 }
 
-std::string UciManager::impl::displayMove( const Position& pos, const Move& m )
+std::string UciManager::impl::displayMove(const Position& pos, const Move& m)
 {
 	std::string s;
 
@@ -412,49 +420,48 @@ std::string UciManager::impl::displayMove( const Position& pos, const Move& m )
 		{
 			s = "O-O-O";
 		}
-		return s;
-
-	}
+	} else {
 
 
-	// 1 ) use the name of the piece if it's not a pawn move
-	if( !pawnMove )
-	{
-		s+= getPieceName( getPieceType( piece ) );
-	}
-	if( fileFlag )
-	{
-		s += _printFileOf( m.getFrom() );
-	}
-	if( rankFlag )
-	{
-		s += _printRankOf( m.getFrom() );
-	}
-
-
-	//capture motation
-	if (capture)
-	{
-		if(pawnMove)
+		// 1 ) use the name of the piece if it's not a pawn move
+		if( !pawnMove )
+		{
+			s+= getPieceName( getPieceType( piece ) );
+		}
+		if( fileFlag )
 		{
 			s += _printFileOf( m.getFrom() );
 		}
-		// capture add x before to square
-		s+="x";
-	}
-	// to square
-	s += _printFileOf( m.getTo() );
-	s += _printRankOf( m.getTo() );
-	// add en passant info
-	if ( isEnPassant )
-	{
-		s+="e.p.";
-	}
-	//promotion add promotion to
-	if(isPromotion)
-	{
-		s += "=";
-		s +=  getPieceName( m.getPromotedPiece() );
+		if( rankFlag )
+		{
+			s += _printRankOf( m.getFrom() );
+		}
+
+
+		//capture motation
+		if (capture)
+		{
+			if(pawnMove)
+			{
+				s += _printFileOf( m.getFrom() );
+			}
+			// capture add x before to square
+			s+="x";
+		}
+		// to square
+		s += _printFileOf( m.getTo() );
+		s += _printRankOf( m.getTo() );
+		// add en passant info
+		if ( isEnPassant )
+		{
+			s+="e.p.";
+		}
+		//promotion add promotion to
+		if(isPromotion)
+		{
+			s += "=";
+			s +=  getPieceName( m.getPromotedPiece() );
+		}
 	}
 	// add check information
 	if( check )
@@ -532,7 +539,7 @@ Move UciManager::impl::_moveFromUci(const Position& pos,const  std::string& str)
 	MovePicker mp(pos);
 	while( ( m = mp.getNextMove() ) )
 	{
-		if(str == displayUci(m))
+		if(str == displayUci(m, pos.isChess960()))
 		{
 			return m;
 		}
@@ -567,7 +574,7 @@ void UciManager::impl::_position(std::istringstream& is)
 	{
 		return;
 	}
-	// todo parse fen!! invalida fen shall be rejected and Vajolet shall not crash
+	// todo parse fen!! invalid fen shall be rejected and Vajolet shall not crash
 	_pos.setupFromFen(fen);
 
 	Move m;
@@ -791,7 +798,7 @@ UciManager::~UciManager() = default;
 
 void UciManager::uciLoop() { pimpl->uciLoop();}
 char UciManager::getPieceName( const bitboardIndex idx ) { return impl::getPieceName(idx);}
-std::string UciManager::displayUci( const Move& m ) { return  impl::displayUci(m);}
+std::string UciManager::displayUci(const Move& m, const bool chess960) { return  impl::displayUci(m, chess960);}
 std::string UciManager::displayMove( const Position& pos, const Move& m ) {  return impl::displayMove(pos, m);}
 
 /*****************************
@@ -800,7 +807,7 @@ uci standard output implementation
 
 bool UciStandardOutput::reduceVerbosity = false;
 
-void UciStandardOutput::printPVs(std::vector<rootMove>& rmList, int maxLinePrint) const
+void UciStandardOutput::printPVs(std::vector<rootMove>& rmList, bool ischess960, int maxLinePrint) const
 {
 	if(maxLinePrint == -1) {
 		maxLinePrint = rmList.size();
@@ -810,11 +817,11 @@ void UciStandardOutput::printPVs(std::vector<rootMove>& rmList, int maxLinePrint
 	for(int i = 0; i < maxLinePrint; ++i)
 	{
 		auto rm = rmList[i];
-		printPV(rm.score, rm.maxPlyReached, rm.time, rm.PV, rm.nodes, normal, rm.depth, i);
+		printPV(rm.score, rm.maxPlyReached, rm.time, rm.PV, rm.nodes, ischess960,  normal, rm.depth, i);
 	}
 }
 
-void UciStandardOutput::printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, const PVbound bound, const int depth, const int count) const
+void UciStandardOutput::printPV(const Score res, const unsigned int seldepth, const long long time, PVline& PV, const unsigned long long nodes, bool ischess960, const PVbound bound, const int depth, const int count) const
 {
 
 	int localDepth = depth == -1? _depth : depth;
@@ -840,13 +847,13 @@ void UciStandardOutput::printPV(const Score res, const unsigned int seldepth, co
 #endif
 
 	std::cout << " pv ";
-	for_each( PV.begin(), PV.end(), [&](Move &m){std::cout<<UciManager::displayUci(m)<<" ";});
+	for_each( PV.begin(), PV.end(), [&](Move &m){std::cout<<UciManager::displayUci(m, ischess960)<<" ";});
 	std::cout<<sync_endl;
 }
 
-void UciStandardOutput::printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time) const
+void UciStandardOutput::printCurrMoveNumber(const unsigned int moveNumber, const Move &m, const unsigned long long visitedNodes, const long long int time, bool isChess960) const
 {
-	sync_cout << "info currmovenumber " << moveNumber << " currmove " << UciManager::displayUci(m) << " nodes " << visitedNodes <<
+	sync_cout << "info currmovenumber " << moveNumber << " currmove " << UciManager::displayUci(m, isChess960) << " nodes " << visitedNodes <<
 #ifndef DISABLE_TIME_DIPENDENT_OUTPUT
 			" time " << time <<
 #endif
@@ -860,7 +867,7 @@ void UciStandardOutput::showCurrLine(const Position & pos, const unsigned int pl
 
 	for (unsigned int i = start; i<= start+ply/2; i++) // show only half of the search line
 	{
-		std::cout << " " << UciManager::displayUci(pos.getState(i).getCurrentMove());
+		std::cout << " " << UciManager::displayUci(pos.getState(i).getCurrentMove(), pos.isChess960());
 	}
 	std::cout << sync_endl;
 
@@ -875,12 +882,12 @@ void UciStandardOutput::printScore(const signed int cp) const
 	sync_cout<<"info score cp "<<cp<<sync_endl;
 }
 
-void UciStandardOutput::printBestMove( const Move& bm, const Move& ponder ) const
+void UciStandardOutput::printBestMove( const Move& bm, const Move& ponder, bool isChess960 ) const
 {
-	sync_cout<<"bestmove "<< UciManager::displayUci(bm);
+	sync_cout<<"bestmove "<< UciManager::displayUci(bm, isChess960);
 	if( ponder )
 	{
-		std::cout<<" ponder " << UciManager::displayUci(ponder);
+		std::cout<<" ponder " << UciManager::displayUci(ponder, isChess960);
 	}
 	std::cout<< sync_endl;
 }
@@ -897,13 +904,13 @@ void UciStandardOutput::printGeneralInfo( const unsigned int fullness, const uns
 /*****************************
 uci Mute output implementation
 ******************************/
-void UciMuteOutput::printPVs(std::vector<rootMove>&, int ) const{}
-void UciMuteOutput::printPV(const Score, const unsigned int, const long long, PVline&, const unsigned long long, const PVbound, const int, const int) const{}
-void UciMuteOutput::printCurrMoveNumber(const unsigned int, const Move& , const unsigned long long , const long long int ) const {}
+void UciMuteOutput::printPVs(std::vector<rootMove>&, bool , int ) const{}
+void UciMuteOutput::printPV(const Score, const unsigned int, const long long, PVline&, const unsigned long long, bool, const PVbound, const int, const int) const{}
+void UciMuteOutput::printCurrMoveNumber(const unsigned int, const Move& , const unsigned long long , const long long int, bool ) const {}
 void UciMuteOutput::showCurrLine(const Position & , const unsigned int ) const{}
 void UciMuteOutput::printDepth() const{}
 void UciMuteOutput::printScore(const signed int ) const{}
-void UciMuteOutput::printBestMove( const Move&, const Move& ) const{}
+void UciMuteOutput::printBestMove( const Move&, const Move&, bool ) const{}
 void UciMuteOutput::printGeneralInfo( const unsigned int , const unsigned long long int , const unsigned long long int , const long long int ) const{}
 
 
@@ -933,9 +940,9 @@ void UciOutput::setPVlineIndex( const unsigned int PVlineIndex )
 	_PVlineIndex = PVlineIndex;
 }
 
-void UciOutput::printPV( const Move& m )
+void UciOutput::printPV( const Move& m, bool ischess960)
 {
 	PVline PV;
 	PV.set(m);
-	printPV(0, 0, 0, PV, 0, normal, 0, 0);
+	printPV(0, 0, 0, PV, 0,ischess960, normal, 0, 0);
 }
